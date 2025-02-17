@@ -1,0 +1,32 @@
+import { createClient } from "@/lib/db"
+import { NextResponse } from "next/server"
+
+export async function GET() {
+    const db = await createClient()
+    const {
+        data: { user },
+        error,
+    } = await db.auth.getUser()
+
+    if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    if (!user) {
+        return NextResponse.json({ error: "No user found" }, { status: 404 })
+    }
+
+    const { data, error: userError } = await db
+        .from("users")
+        .select(
+            "id, name, username, avatar, biography, website, followers, following"
+        )
+        .eq("id", user.id)
+        .single()
+
+    if (userError) {
+        return NextResponse.json({ error: userError.message }, { status: 500 })
+    }
+
+    return NextResponse.json(data, { status: 200 })
+}
