@@ -24,7 +24,7 @@ export function UserContextProvider({ children }: { children: React.ReactNode })
   });
 
   const user = data || null;
-
+  
   return (
     <UserContext.Provider value={{ user, isLoading }}>
       {children}
@@ -34,6 +34,7 @@ export function UserContextProvider({ children }: { children: React.ReactNode })
 
 export function useUser() {
   const context = useContext(UserContext);
+  
   if (!context) {
     console.warn("useUser debe usarse dentro de un UserProvider");
     return { user: null, isLoading: true };

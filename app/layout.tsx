@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next"
 import { Geist } from "next/font/google"
 import "./globals.css"
 import { UserContextProvider } from "@/contexts/UserContext"
+import { Toaster } from "@/components/ui/sonner"
+import { ThemeProvider } from "@/components/theme-provider"
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -64,9 +66,13 @@ export default function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body className={`${geistSans.variable} antialiased`}>
-              <UserContextProvider>
-                {children}
-              </UserContextProvider>
+                <UserContextProvider>
+                    <ThemeProvider>
+                    {children}
+                    </ThemeProvider>
+                    </UserContextProvider>
+
+                <Toaster />
             </body>
         </html>
     )

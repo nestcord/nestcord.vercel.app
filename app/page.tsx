@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Apple } from "lucide-react"
 
 export default function App() {
-    const handleSession = async () => {
-        await db.auth.signInWithOAuth({
+    const handleSession = () => {
+        db.auth.signInWithOAuth({
             provider: "google",
             options: {
-                redirectTo: "https://nestcord.vercel.app/auth/callback",
+                redirectTo: "/auth/callback?redirect_to=/home",
             },
         })
+
     }
     return (
         <main className="grid min-h-screen grid-rows-[1fr,auto]">
@@ -53,7 +54,7 @@ export default function App() {
 
                         <div className="space-y-4 max-w-xs">
                             <Button
-                                onClick={() => handleSession()}
+                                onClick={handleSession}
                                 variant="outline"
                                 className="w-full bg-white hover:bg-neutral-50 border border-neutral-200 text-black font-medium flex items-center justify-center gap-2
               dark:bg-white"

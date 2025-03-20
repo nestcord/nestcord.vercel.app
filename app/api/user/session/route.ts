@@ -19,7 +19,7 @@ export async function GET() {
     const { data, error: userError } = await db
         .from("users")
         .select(
-            "id, name, username, avatar, biography, website, followers, following"
+            "id, name, username, avatar, biography, category, website, followers, following, banner"
         )
         .eq("id", user.id)
         .single()

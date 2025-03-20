@@ -1,55 +1,68 @@
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
+import { Home, Search, Bell, Mail, User, MoreHorizontal } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useUser } from "@/contexts/UserContext"
+import { SidebarProfile } from "./sidebar/Sidebar-Profile"
+import SidebarCreatePost from "../status/Sidebar-Create-Post"
 import Image from "next/image"
-import { Home, Search, Bell, User, Feather } from "lucide-react"
-
-import { SidebarLink } from "@/components/navigation/sidebar/Sidebar-Link"
-import { SidebarProfile } from "@/components/navigation/sidebar/Sidebar-Profile"
-export type NavLink = {
-    href: string
-    name: string
-    icon: React.JSX.Element
-}
-
-const NavLinks: Readonly<NavLink[]> = [
-    { href: "/home", name: "Home", icon: <Home size={24} /> },
-    { href: "/explore", name: "Explore", icon: <Search size={24} /> },
-    { href: "/notifications", name: "Notifications", icon: <Bell size={24} /> },
-    { href: "/profile", name: "Profile", icon: <User size={24} /> },
-]
-
+import { usePathname } from "next/navigation"
 export default function Sidebar() {
-    return (
-        <aside className="fixed left-0 top-0 h-full w-20 xl:w-72 p-4 flex flex-col justify-between border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
-            {/* Logo */}
-            <div className="flex items-center justify-center xl:justify-start mb-6">
-                <Link href="/home">
-                    <Image
-                        src="/assets/NestcordAppIcon.webp"
-                        width={40}
-                        height={40}
-                        alt="Nestcord Logo"
-                    />
+  const isMobile = useIsMobile()
+  const { user } = useUser()
+  const [expanded] = useState(true)
+
+  const navItems = [
+    { icon: Home, label: "Home", href: "/home" },
+    { icon: Search, label: "Explore", href: "/explore" },
+    { icon: Bell, label: "Notifications", href: "/notifications" },
+    { icon: Mail, label: "Messages", href: "/messages" },
+    { icon: User, label: "Profile", href: `/${user?.username}` },
+    { icon: MoreHorizontal, label: "More options", href: "#" },
+  ]
+
+
+  const pathname = usePathname()
+  
+  return (
+    <div
+      className={`sticky top-0 h-screen ${isMobile ? "w-[70px]" : expanded ? "w-[275px]" : "w-[88px]"} flex-shrink-0 py-2 pr-2 border-r`}
+    >
+      <div className="flex h-full flex-col justify-between">
+        <div className="space-y-2">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full p-3">
+                <Link href="/">
+                <Image src="/assets/NestcordAppIcon.webp" alt="Logo" width={80} height={80} />
                 </Link>
-            </div>
+          </div>
+          <nav className="space-y-1">
+          {navItems.map((item) => {
+  const isActive = pathname === item.href;
 
-            {/* Navigation */}
-            <nav className="flex flex-col gap-4">
-                {NavLinks.map((link) => (
-                    <SidebarLink key={link.href} {...link} />
-                ))}
-            </nav>
+  return (
+    <Link
+      key={item.label}
+      href={item.href}
+      className={`flex items-center gap-4 rounded-full p-5 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors ${
+        isActive ? "font-bold text-black dark:text-white" : ""
+      }`}
+    >
+      <item.icon className="h-7 w-7" />
+      {expanded && !isMobile && <span className="text-xl">{item.label}</span>}
+    </Link>
+  );
+})}
 
-            {/* Post Button */}
-            <button className="hidden xl:flex items-center justify-center gap-2 p-4 w-full bg-blue-500 text-white rounded-full hover:bg-blue-600 transition">
-                <p className="hidden xl:block">Post</p>
-            </button>
+          </nav>
+          <div >
+            {expanded && !isMobile ? <SidebarCreatePost /> : <SidebarCreatePost />}
+          </div>
+        </div>
 
-            <SidebarProfile />
-
-            {/* Floating Icon Button for Mobile */}
-            <button className="xl:hidden fixed bottom-4 left-4 bg-blue-500 p-4 rounded-full text-white shadow-lg hover:bg-blue-600">
-                <Feather size={24} />
-            </button>
-        </aside>
-    )
+        <SidebarProfile />
+      </div>
+    </div>
+  )
 }

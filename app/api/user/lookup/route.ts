@@ -1,20 +1,35 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from "next/server"
 
-import { createClient } from "@/lib/db";
+import { createClient } from "@/lib/db"
 
-export async function GET() {
+export async function GET(req: Request) {
+    const db = await createClient()
+    const { searchParams } = new URL(req.url)
+    const search = searchParams.get("search") || ""
 
-    const db = await createClient();
+    const { data: userData } = await db.auth.getUser()
 
-    const { data: userData } = await db.auth.getUser();
-    
-    const query = db
-    .from("users")
-    .select("id, name, username, avatar")
-    .neq("id", userData.user?.id)
-    .limit(4);
+    let query = db
+        .from("users")
+        .select("id, name, username, avatar")
+        .neq("id", userData.user?.id)
+        .limit(4)
 
-    const { data } = await query;
+    if (search) {
+        query = query.or(`name.ilike.%${search}%,username.ilike.%${search}%`)
+    }
 
-    return NextResponse.json({ data }, { status: 200 });
+    const { data, error } = await query
+
+    if (error) {
+        return NextResponse.json(
+            {
+                code: error.code,
+                message: error.message,
+            },
+            { status: 500 }
+        )
+    }
+
+    return NextResponse.json(data)
 }

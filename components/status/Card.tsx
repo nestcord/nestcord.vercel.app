@@ -1,129 +1,318 @@
-"use client";
+"use client"
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { ChartNoAxesColumn, Heart, MessageCircle, Share } from "lucide-react";
-import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import { useEffect, useRef, useState } from "react";
-import { useInView } from "react-intersection-observer";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { mutate } from "swr";
-import { updateStatusViews } from "../actions/Update-Views";
-
-dayjs.extend(relativeTime);
-
+import { useEffect, useRef, useState } from "react"
+import dynamic from 'next/dynamic'
+import Link from "next/link"
+import Image from "next/image"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { Heart, MessageCircle, Share, Send, BarChartIcon as ChartNoAxesColumn } from "lucide-react"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
+import { useInView } from "react-intersection-observer"
+import { db } from "@/lib/client"
+import { useUser } from "@/contexts/UserContext"
+import { ChatConversation } from "../messages/Chat-Conversation"
+import { updateStatusViews } from "../actions/Update-Views"
+import { mutate } from "swr"
 export interface CardProps {
-  id: string;
+  id: string
   author: {
-    id: string;
-    name: string;
-    username: string;
-    avatar: string;
-    biography?: string;
-    created_at: string;
-  };
-  content: string;
-  comments: number;
-  likes: number;
-  views: number;
-  created_at: string;
+    id: string
+    name: string
+    username: string
+    avatar: string
+    biography?: string
+    created_at: string
+  }
+  attachment?: string
+  content: string
+  comments: number
+  likes: number
+  views: number
+  created_at: string
 }
 
-export default function Card({ id, author, content, comments, likes, views, created_at }: CardProps) {
-  const [hasLiked, setHasLiked] = useState(false);
-  const createdAt = dayjs(created_at).fromNow();
+const StatusCardOptions = dynamic(() => import("@/components/status/Status-Options"), { ssr: false })
 
-  const hasViewed = useRef(false);
-  const { ref, inView } = useInView({
+
+export default function StatusCard({ id, author, content, comments, likes, views, attachment, created_at }: CardProps) {
+
+  const { user } = useUser();
+
+  const [hasLiked, setHasLiked] = useState(false)
+  const [statusLikes, setStatusLikes] = useState(likes)
+  const [isOpen, setIsOpen] = useState(false)
+
+  const toggleChat = () => {
+    setIsOpen(!isOpen);
+};
+const hasViewed = useRef(false)
+const { ref, inView } = useInView({
     threshold: 0.5,
     triggerOnce: true,
-  })
-  // Simulación de acción de "Like"
-  const handleLike = () => setHasLiked(!hasLiked);
+})
 
-  // Simulación de aumento de vistas
-  useEffect(() => {
+const handleLike = async () => {
+  if (!user) return
 
-    if (inView && !hasViewed.current) {
-      updateStatusViews(id, views + 1, author.id).then((success) => {
-        if (success) mutate(`/api/feed?id=${id}`)
+  // Verificar si el usuario ya ha dado like
+  const { data, error } = await db
+      .from("likes")
+      .select("id")
+      .eq("status", id)
+      .eq("user_id", user.id)
+      .single()
+
+if (error && error.code !== "PGRST116") {
+    console.error("Error al verificar like:", error)
+    return
+}
+
+if (data) {
+    // Si ya existe el like, lo eliminamos
+    await db
+        .from("likes")
+        .delete()
+        .match({ status: id, user_id: user.id })
+
+    // Reducir el contador de likes en la tabla status
+    await db
+        .from("status")
+        .update({ likes: statusLikes - 1 })
+        .eq("id", id)
+
+        await db
+        .from("status_replies")
+        .update({ likes: statusLikes - 1 })
+        .eq("id", id)
+
+
+    // Reducir el contador localmente
+    setStatusLikes((prev) => Math.max(prev - 1, 0))
+    setHasLiked(false) // Actualizamos el estado del like
+} else {
+    // Si no existe, agregamos el like
+    await db.from("likes").insert({ status: id, user_id: user.id, author: author.id })
+
+    // Aumentar el contador de likes en la tabla status
+    await db
+        .from("status")
+        .update({ likes: statusLikes + 1 })
+        .eq("id", id)
+
+        await db
+        .from("status_replies")
+        .update({ likes: statusLikes + 1 })
+        .eq("id", id)
+
+    // Aumentar el contador localmente
+    setStatusLikes((prev) => prev + 1)
+    setHasLiked(true) // Actualizamos el estado del like
+}
+}
+
+useEffect(() => {
+  const fetchLikeStatus = async () => {
+      if (!user) return
+
+      const { data, error } = await db
+          .from("likes")
+          .select("id")
+          .eq("status", id)
+          .eq("user_id", user.id)
+          .single()
+
+      if (error && error.code !== "PGRST116") {
+          console.error("Error al obtener like:", error)
+          return
+      }
+
+      setHasLiked(!!data) // Si data existe, significa que el usuario ya dio like
+  }
+
+  fetchLikeStatus()
+}, [id, user])
+
+// Simulación de aumento de vistas
+useEffect(() => {
+  if (inView && !hasViewed.current) {
+      updateStatusViews(id, views + 1).then((success) => {
+          if (success) mutate(`/api/feed?id=${id}`)
       })
-      hasViewed.current = true;
-    }
-  }, [author.id, id, inView, views]);
+      hasViewed.current = true
+  }
+}, [author.id, id, inView, views])
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+  
+    const isThisYear = date.getFullYear() === now.getFullYear();
+  
+    return new Intl.DateTimeFormat("es-ES", {
+      day: "numeric",
+      month: "short",
+      ...(isThisYear ? {} : { year: "numeric" }),
+    }).format(date);
+  };
+  
+  {/** Handle share link to clipboard */}
+  const shareLink = () => {
+    navigator.clipboard.writeText("https://nestcord.vercel.app/status/" + id)
+    console.info("\x1b[36m%s\x1b[0m", "[LOG]", `Copied status ${id} to clipboard`);
+  }
+
+  const uuid1 = user?.id
+  const uuid2 = author.id
+  
+  let channelId: string | undefined;
+
+  if (uuid1 && uuid2) {
+    // Extraer la primera parte de cada UUID
+    const firstPart1 = uuid1.split('-')[0];
+    const firstPart2 = uuid2.split('-')[0];
+
+    // Convertir de hexadecimal a decimal y sumar
+    const decimal1 = parseInt(firstPart1, 16);
+    const decimal2 = parseInt(firstPart2, 16);
+
+    channelId = (decimal1 + decimal2).toString();
 
   return (
-    <div ref={ref} className="border-b border-border px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+    <div className="bg-white dark:bg-background px-4 py-3 hover:bg-slate-50 dark:hover:bg-gray-800/30 cursor-pointer transition-colors" ref={ref}>
       <div className="flex gap-3">
-        {/* Enlace al perfil del autor (Avatar y nombre) */}
+        {/* Avatar del autor */}
         <Link href={`/${author.username}`} className="flex-shrink-0">
           <Avatar className="h-10 w-10">
             <AvatarImage src={author.avatar} alt={author.username} />
-            <AvatarFallback>2</AvatarFallback>
+            <AvatarFallback>{author.name.charAt(0)}</AvatarFallback>
           </Avatar>
         </Link>
 
         <div className="flex-1">
-          <div className="flex items-center gap-2">
-            {/* Enlace al perfil del autor (nombre) */}
+          {/* Información del autor y opciones */}
+          <div className="flex items-center w-full">
             <HoverCard>
               <HoverCardTrigger asChild>
                 <Link href={`/${author.username}`} className="font-bold hover:underline">
                   {author.name}
                 </Link>
               </HoverCardTrigger>
-              <HoverCardContent className="w-64">
-                <p className="text-sm">{author.biography || "No bio available"}</p>
+              <HoverCardContent className="w-64 bg-black border border-gray-800 text-white p-4">
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={author.avatar} alt={author.username} />
+                    <AvatarFallback>{author.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <Link href={`/${author.username}`} className="font-bold hover:underline">
+                    {author.name}
+                  </Link>
+                </div>
+                <div className="mt-2">
+                  <p className="text-sm text-gray-400">{author.biography || "No bio available"}</p>
+                </div>
               </HoverCardContent>
             </HoverCard>
-            <span className="text-muted-foreground text-sm">@{author.username} · {createdAt}</span>
+
+            <span className="text-gray-500 text-sm ml-2">
+              @{author.username} · {formatDate(created_at)}
+            </span>
+
+            <div className="ml-auto">
+            <StatusCardOptions
+        author={author.id}
+        username={author.username}
+        id={id}
+    />
+            </div>
           </div>
 
-          {/* Enlace al post completo */}
-          <Link href={`/status/${id}`} className="mt-2 text-[15px] leading-normal">
-            <ReactMarkdown>{content}</ReactMarkdown>
+          {/* Contenido del post */}
+          <Link href={`/status/${id}`} className="mt-2 block">
+            <div className="text-[15px] leading-normal break-all whitespace-pre-wrap">{content}</div>
+
+            {attachment && (
+              <div className="mt-3 rounded-xl overflow-hidden">
+                <Image
+                  src={attachment || "/placeholder.svg"}
+                  alt="Attachment"
+                  className="max-w-full h-auto"
+                  width={500}
+                  height={300}
+                />
+              </div>
+            )}
           </Link>
 
           {/* Acciones del post */}
-          <div className="flex items-center gap-6 mt-3">
-            {/* Comentarios */}
-            <Button variant="ghost" size="icon" className="h-8 w-8 group hover:text-blue-500">
-              <MessageCircle className="w-4 h-4" />
-              <span className="text-sm text-muted-foreground">{comments}</span>
-            </Button>
+          <div className="flex justify-between items-center mt-3">
+            {/* Izquierda: Comentarios, Likes, Vistas */}
+            <div className="flex items-center gap-4">
+              {/* Comentarios */}
+              <Link href={`/status/${id}`}>
+                <Button variant="ghost" className="group flex items-center gap-1 text-gray-500 hover:text-indigo-500 p-0 hover:bg-transparent">
+                  <div className="rounded-full p-1.5 group-hover:bg-sky-500/10">
+                    <MessageCircle className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs">{comments}</span>
+                </Button>
+              </Link>
 
-            {/* Likes */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLike}
-              className={`h-8 w-8 ${hasLiked ? "text-red-500" : "hover:text-red-500"}`}
-            >
-              <Heart className="w-4 h-4" />
-              <span className="text-sm text-muted-foreground">{likes}</span>
-            </Button>
+              {/* Likes */}
+              <Button
+                variant="ghost"
+                onClick={handleLike}
+                className={`group flex items-center gap-1 p-0 ${hasLiked ? "text-pink-500" : "text-gray-500 hover:text-pink-500"} hover:bg-transparent`}
+              >
+                <div className={`rounded-full p-1.5 ${hasLiked ? "bg-pink-500/10" : "group-hover:bg-pink-500/10"}`}>
+                  <Heart className={`h-4 w-4 ${hasLiked ? "fill-pink-500" : ""}`} />
+                </div>
+                <span className="text-xs">{statusLikes}</span>
+              </Button>
 
-            {/* Enlace a las vistas */}
-            <Link href={`/post/${id}`}>
-            <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-blue-500">
-              <ChartNoAxesColumn className="w-4 h-4" />
-              <span className="text-sm text-muted-foreground">{views}</span>
-            </Button>
-            </Link>
+              {/* Vistas */}
+              <Link href={`/status/${id}`}>
+                <Button variant="ghost" className="group flex items-center gap-1 text-gray-500 hover:text-indigo-500 p-0 hover:bg-transparent">
+                  <div className="rounded-full p-1.5 group-hover:bg-sky-500/10">
+                    <ChartNoAxesColumn className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs">{views}</span>
+                </Button>
+              </Link>
+            </div>
 
-            {/* Compartir */}
-            <Button
-              variant="ghost"
-              size="icon"
-            >
-              <Share className="w-4 h-4" />
-            </Button>
+            {/* Derecha: Compartir y Mensajería */}
+            <div className="flex items-center gap-2">
+              {/* Compartir */}
+              <Button
+                variant="ghost"
+                onClick={shareLink}
+                className="rounded-full p-1.5 text-gray-500 hover:bg-indigo-500/10 hover:text-indigo-500 "
+              >
+                <Share className="h-4 w-4" />
+              </Button>
+
+              {/* Mensajería */}
+            {/* Mensajería */}
+            {author.id !== user?.id && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full p-1.5 text-gray-500 hover:bg-indigo-500/10 hover:text-indigo-500"
+                    onClick={toggleChat}
+                >
+                    <Send className="w-4 h-4" />
+                </Button>
+            )}
+            </div>
           </div>
+                              {/* Chat (simulado) */}
+                              {isOpen && channelId && (
+                        <ChatConversation user={author} onBack={toggleChat} channelId={channelId} />
+                    )}
         </div>
       </div>
     </div>
-  );
+  )
+}
 }
